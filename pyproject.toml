@@ -1,0 +1,29 @@
+[project]
+name = "bug-report-checker-sandbox"
+version = "0.1.0"
+description = "End-to-end tests of bug-report-checker in this sandbox."
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.10",
+]
+
+[tool.uv]
+# Keep everything inside the project: no shared cache, no Python downloads into the user profile.
+cache-dir = ".uv-cache"
+python-preference = "only-system"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+markers = ["e2e: files real issues in this repository; needs E2E_TOKEN or a gh login"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["sandbox"] # tests/sandbox.py, imported from the tests folder
