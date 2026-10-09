@@ -3,6 +3,13 @@ name: Bug report check
 on:
   issues:
     types: [opened, edited, labeled, unlabeled, typed, untyped, reopened]
+  # Issue runs only read the Actions cache; these trusted events fill it with the model.
+  push:
+    branches: [main]
+    paths: [.github/workflows/bug-checker.yml]
+  schedule:
+    - cron: "17 3 * * 1" # weekly, before the cache's 7-day eviction
+  workflow_dispatch:
 
 permissions:
   contents: read # the config, .github/bug-checker.yml
@@ -10,7 +17,7 @@ permissions:
 
 # Edits in a row: only the last check runs to the end.
 concurrency:
-  group: bug-checker-${{ github.event.issue.number }}
+  group: bug-checker-${{ github.event.issue.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -18,4 +25,4 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: maksimTrs/bug-report-checker@a5d1f41f32820692012709f2c6d0b6f99ff39ae5
+      - uses: maksimTrs/bug-report-checker@68676378a09e196d04ca14487a0453d353c94981
