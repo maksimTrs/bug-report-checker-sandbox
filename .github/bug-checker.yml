@@ -1,0 +1,4 @@
+# Settings of bug-report-checker for this repository; every key is optional.
+status_labels: [Submitted, Open, In Progress]
+environments: [staging, qa1]
+comment_on_success: true

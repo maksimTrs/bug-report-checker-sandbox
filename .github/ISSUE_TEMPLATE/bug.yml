@@ -1,0 +1,24 @@
+name: Bug report
+description: Something does not work as it should.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Build version
+      description: The exact build or version where you saw the bug.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result

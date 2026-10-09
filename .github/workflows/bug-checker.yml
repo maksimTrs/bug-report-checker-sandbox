@@ -1,0 +1,21 @@
+name: Bug report check
+
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled, typed, untyped, reopened]
+
+permissions:
+  contents: read # the config, .github/bug-checker.yml
+  issues: write # the comment
+
+# Edits in a row: only the last check runs to the end.
+concurrency:
+  group: bug-checker-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: maksimTrs/bug-report-checker@75f7fc47e5509eb51173c678527a69627cbd12c8
