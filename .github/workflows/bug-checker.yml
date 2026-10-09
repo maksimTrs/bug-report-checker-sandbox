@@ -25,4 +25,4 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: maksimTrs/bug-report-checker@68676378a09e196d04ca14487a0453d353c94981
+      - uses: maksimTrs/bug-report-checker@2e7c5db5abbe9434f85398a0895a661f394c8784
