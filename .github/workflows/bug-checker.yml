@@ -22,7 +22,14 @@ concurrency:
 
 jobs:
   check:
+    # A label that is neither bug nor a status (e2e, duplicate, ...) changes nothing
+    # the bot checks: skip it before a runner starts. Keep the list in step with
+    # status_labels in .github/bug-checker.yml; contains() ignores case.
+    if: >-
+      !contains(fromJSON('["labeled", "unlabeled"]'), github.event.action)
+      || contains(fromJSON('["bug", "Submitted", "Open", "In Progress"]'),
+      github.event.label.name)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: maksimTrs/bug-report-checker@54d46914824c1ad0f2091d28890c145ad697cb8e
+      - uses: maksimTrs/bug-report-checker@5bb01a1347f2986a2c2bebf31a34c91b52f42004
