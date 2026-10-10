@@ -1,13 +1,16 @@
 """The sandbox repository through the GitHub REST API, for end-to-end tests.
 
-A test files a real bug, waits for the bot's comment and closes the bug. The bot
+A test files a real bug, waits for the bot's comment, reads its findings and
+closes the bug. The bot
 runs only on issues opened with a user's token: events from a workflow's
 GITHUB_TOKEN start no workflows. Every issue filed here carries the `e2e` label,
 so one left open by a killed run is closed by the next run.
 """
 
+import re
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -99,3 +102,63 @@ class Sandbox:
             if "pull_request" not in i
             and datetime.fromisoformat(i["created_at"]) < cutoff
         ]
+
+
+# The bot's comment, as comment.py in bug-report-checker writes it: blockers by name.
+CHECKS = {
+    "Steps to reproduce": "steps",
+    "Expected result": "expected",
+    "Actual result": "actual",
+    "Build version": "build_version",
+}
+_MISSING = re.compile(r"^- \*\*(.+?)\*\*:", re.M)
+_UNSURE = re.compile(r"^Not sure about: (.+?)\. Please", re.M)
+_BOLD = re.compile(r"\*\*(.+?)\*\*")
+
+
+@dataclass(frozen=True)
+class Findings:
+    complete: bool
+    missing: frozenset[str] = frozenset()
+    unsure: frozenset[str] = frozenset()
+    long: bool = False  # read in parts: the bot says it could not confirm details
+
+    def __str__(self) -> str:
+        if self.complete:
+            text = "complete"
+        else:
+            parts = [f"missing {', '.join(sorted(self.missing))}"] * bool(self.missing)
+            parts += [f"unsure {', '.join(sorted(self.unsure))}"] * bool(self.unsure)
+            text = "; ".join(parts)
+        return text + " (read in parts)" * self.long
+
+
+def findings(body: str) -> Findings:
+    """An unknown check name raises KeyError: the comment format has changed."""
+    main = body.split("<details>", 1)[0]  # the suggestions are folded below
+    unsure = _UNSURE.search(main)
+    return Findings(
+        complete="Bug report complete." in main,
+        missing=frozenset(CHECKS[name] for name in _MISSING.findall(main)),
+        unsure=frozenset(CHECKS[n] for n in _BOLD.findall(unsure[1]))
+        if unsure
+        else frozenset(),
+        long="read in parts" in main,
+    )
+
+
+def summary_table(rows: list[dict]) -> str:
+    """The e2e report for the Job Summary: scenario -> issue -> bot -> result."""
+    lines = [
+        "## E2E scenarios",
+        "",
+        "| Scenario | Issue | Expected | Bot found | Result |",
+        "|---|---|---|---|---|",
+    ]
+    for r in rows:
+        issue = f"[#{r['issue']}](https://github.com/{REPO}/issues/{r['issue']})"
+        result = "✅ pass" if r["passed"] else "❌ fail"
+        lines.append(
+            f"| {r['scenario']} | {issue} | {r['expected']} | {r['found']} | {result} |"
+        )
+    return "\n".join(lines) + "\n"

@@ -3,7 +3,9 @@ import subprocess
 
 import pytest
 
-from sandbox import Sandbox, client
+from sandbox import Sandbox, client, summary_table
+
+_REPORT = []  # one row per scenario, for the Job Summary
 
 
 def _token() -> str:
@@ -29,15 +31,38 @@ def sandbox():
 
 
 @pytest.fixture
-def new_bug(sandbox):
+def new_bug(sandbox, record_property):
     """Files bugs for one test and closes them after it, pass or fail."""
     opened = []
 
     def open_bug(title: str, body: str, labels: tuple[str, ...] = ()) -> int:
         number = sandbox.open_bug(title, body, labels)
         opened.append(number)
+        record_property("issue", number)
         return number
 
     yield open_bug
     for number in opened:
         sandbox.close(number)
+
+
+def pytest_runtest_logreport(report):
+    props = dict(report.user_properties)
+    if report.when == "call" and "scenario" in props and "issue" in props:
+        _REPORT.append(
+            {
+                "scenario": props["scenario"],
+                "issue": props["issue"],
+                "expected": props["expected"],
+                "found": props.get("found", "no comment"),
+                "passed": report.passed,
+            }
+        )
+
+
+def pytest_terminal_summary(terminalreporter):
+    """In CI the scenarios' table goes to the run's Job Summary."""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if path and _REPORT:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(summary_table(_REPORT))
