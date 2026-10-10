@@ -2,3 +2,4 @@
 status_labels: [Submitted, Open, In Progress]
 environments: [staging, qa1]
 comment_on_success: true
+strict: true
