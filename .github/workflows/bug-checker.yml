@@ -15,16 +15,21 @@ permissions:
   contents: read # the config, .github/bug-checker.yml
   issues: write # the comment
 
-# Edits in a row: only the last check runs to the end.
+# A label that is neither bug nor a status (e2e, duplicate, ...) changes nothing the
+# bot checks, so its event is skipped. Keep the list in step with status_labels in
+# .github/bug-checker.yml; contains() ignores case.
+# Edits in a row: only the last check runs to the end. A skipped event gets a group
+# of its own: in the issue's group it would cancel the checks it does not replace.
 concurrency:
-  group: bug-checker-${{ github.event.issue.number || github.ref }}
+  group: >-
+    bug-checker-${{ github.event.issue.number || github.ref }}${{
+    contains(fromJSON('["labeled", "unlabeled"]'), github.event.action)
+    && !contains(fromJSON('["bug", "Submitted", "Open", "In Progress"]'),
+    github.event.label.name) && format('-skip-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
   check:
-    # A label that is neither bug nor a status (e2e, duplicate, ...) changes nothing
-    # the bot checks: skip it before a runner starts. Keep the list in step with
-    # status_labels in .github/bug-checker.yml; contains() ignores case.
     if: >-
       !contains(fromJSON('["labeled", "unlabeled"]'), github.event.action)
       || contains(fromJSON('["bug", "Submitted", "Open", "In Progress"]'),
