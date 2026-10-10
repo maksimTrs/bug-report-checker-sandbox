@@ -2,9 +2,11 @@
 
 The sandbox runs the bot with `strict: true`, so the expected findings follow the
 strict criteria: steps, expected and actual count only when the description
-itself states them. All texts are made up.
+itself states them. All texts are made up and mention no one: an @name in an
+issue notifies that GitHub user.
 """
 
+import re
 from dataclasses import dataclass
 
 import pytest
@@ -232,11 +234,16 @@ Steps to reproduce:
 
 Actual: the list starts with parcels from 2019.
 
-@dana shouldn't the newest be on top?
+Dana, shouldn't the newest be on top?
 """,
         frozenset({"expected"}),
     ),
 ]
+
+
+def test_scenarios_mention_no_one():
+    mention = re.compile(r"(?<![\w`])@[A-Za-z0-9-]")
+    assert not [s.id for s in SCENARIOS if mention.search(s.title + s.body)]
 
 
 @pytest.mark.e2e
