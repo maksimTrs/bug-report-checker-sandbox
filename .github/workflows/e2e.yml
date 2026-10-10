@@ -50,6 +50,6 @@ jobs:
       # workflows, so the bot would never see them. Fine-grained PAT, this repository
       # only: Issues read and write.
       - name: Test
-        run: uv run --no-sync pytest -v
+        run: uv run --no-sync pytest -v -n 12 # a worker per scenario: they wait in parallel
         env:
           E2E_TOKEN: ${{ secrets.E2E_TOKEN }}

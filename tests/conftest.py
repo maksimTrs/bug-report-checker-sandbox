@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 
 import pytest
@@ -60,9 +61,15 @@ def pytest_runtest_logreport(report):
         )
 
 
+def _order(row: dict) -> tuple[int, str]:
+    """Scenario number first: 2 before 10, 6a before 6b."""
+    return int(re.match(r"\d+", row["scenario"])[0]), row["scenario"]
+
+
 def pytest_terminal_summary(terminalreporter):
-    """In CI the scenarios' table goes to the run's Job Summary."""
+    """In CI the scenarios' table goes to the run's Job Summary. Under xdist only
+    the controller writes it: workers send it their reports, in finishing order."""
     path = os.environ.get("GITHUB_STEP_SUMMARY")
-    if path and _REPORT:
+    if path and _REPORT and "PYTEST_XDIST_WORKER" not in os.environ:
         with open(path, "a", encoding="utf-8") as f:
-            f.write(summary_table(_REPORT))
+            f.write(summary_table(sorted(_REPORT, key=_order)))
