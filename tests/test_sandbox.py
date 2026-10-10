@@ -126,31 +126,50 @@ Not sure about: **Actual result**, **Expected result**. Please check them yourse
 This report is long and was read in parts, so details could not be confirmed.
 
 <details>
-<summary>Suggestions (1)</summary>
+<summary>Suggestions (2)</summary>
 
-- Describe the **actual** result in text too, not only as a screenshot.
+- Say in the title what is wrong, not what to do.
+- Describe the actual result in text too, not only as a screenshot.
 
 </details>
 
-<sub>Checked in status **Submitted** by bug-report-checker.</sub>"""
+<sub>Checked in status **Submitted** by bug-report-checker.\
+ Environment: staging, prod.</sub>"""
 
 
 def test_findings_of_a_complete_report():
     assert findings(COMPLETE) == Findings(complete=True)
 
 
-def test_findings_read_blockers_but_not_the_suggestions():
-    assert findings(MISSING) == Findings(
+def test_findings_read_blockers_hints_and_environment():
+    found = findings(MISSING)
+    assert found == Findings(
         complete=False,
         missing=frozenset({"steps", "build_version"}),
         unsure=frozenset({"actual", "expected"}),
         long=True,
+        environments=("staging", "prod"),
+    )
+    assert found.hints == frozenset({"title_what", "image_actual"})
+
+
+def test_hints_do_not_decide_equality():
+    # Soft and noisy: a scenario names the hints it needs, not all of them.
+    assert Findings(complete=True, hints=frozenset({"title_when"})) == Findings(
+        complete=True
     )
 
 
-def test_findings_fail_loudly_on_an_unknown_check():
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Missing:\n- **Severity**: say how bad it is.",
+        "<details>\n\n- Attach the logs.\n\n</details>",
+    ],
+)
+def test_findings_fail_loudly_on_an_unknown_check_or_hint(body):
     with pytest.raises(KeyError):
-        findings("Missing:\n- **Severity**: say how bad it is.")
+        findings(body)
 
 
 @pytest.mark.parametrize(
@@ -164,6 +183,14 @@ def test_findings_fail_loudly_on_an_unknown_check():
         (
             Findings(complete=False, unsure=frozenset({"actual"}), long=True),
             "unsure actual (read in parts)",
+        ),
+        (
+            Findings(
+                complete=True,
+                hints=frozenset({"title_when", "image_actual"}),
+                environments=("prod",),
+            ),
+            "complete; hints image_actual, title_when; environment prod",
         ),
     ],
 )

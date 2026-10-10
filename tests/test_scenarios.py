@@ -18,10 +18,17 @@ class Scenario:
     title: str
     body: str
     missing: frozenset[str] = frozenset()  # none: the bot calls the report complete
+    hints: frozenset[str] = frozenset()  # must be there; others may be too
+    environments: tuple[str, ...] = ()
 
     @property
     def expected(self) -> Findings:
-        return Findings(complete=not self.missing, missing=self.missing)
+        return Findings(
+            complete=not self.missing,
+            missing=self.missing,
+            environments=self.environments,
+            hints=self.hints,
+        )
 
 
 STACKTRACE = "\n".join(
@@ -101,6 +108,134 @@ _No response_
         STACKTRACE,
         frozenset({"steps", "expected", "build_version"}),
     ),
+    Scenario(
+        "5. title phrased as a task",
+        "Fix the duplicate tracking emails",
+        """### Build version
+
+2.4.1 (build 1873)
+
+### Steps to reproduce
+
+1. Create a shipment with e-mail notifications on.
+2. Mark it as Out for delivery.
+
+### Actual result
+
+The customer gets two identical "Out for delivery" e-mails.
+
+### Expected result
+
+One e-mail per status change.
+""",
+        hints=frozenset({"title_what"}),
+    ),
+    Scenario(
+        "6a. actual result only as a screenshot",
+        "Label preview cuts off the barcode",
+        """### Build version
+
+2.4.1 (build 1873)
+
+### Steps to reproduce
+
+1. Open a shipment.
+2. Click Preview label.
+
+### Actual result
+
+![preview](https://github.com/user-attachments/assets/label-preview.png)
+
+### Expected result
+
+The whole barcode is visible in the preview.
+""",
+        hints=frozenset({"image_actual"}),
+    ),
+    Scenario(
+        "6b. expected result only as a screenshot",
+        "Invoice header shows the old company address",
+        """### Build version
+
+2.4.1 (build 1873)
+
+### Steps to reproduce
+
+1. Open Billing.
+2. Download the invoice for September.
+
+### Actual result
+
+The header shows the old address, 12 Dock Road.
+
+### Expected result
+
+![mockup](https://github.com/user-attachments/assets/invoice-header.png)
+""",
+        hints=frozenset({"image_expected"}),
+    ),
+    Scenario(
+        "7. build version is current prod",
+        "Bulk relabel skips cancelled parcels",
+        """### Build version
+
+current prod
+
+### Steps to reproduce
+
+1. Select ten parcels, two of them cancelled.
+2. Click Relabel.
+
+### Actual result
+
+Only eight labels are created; the cancelled parcels get none.
+
+### Expected result
+
+All ten parcels get a new label.
+""",
+        frozenset({"build_version"}),
+        environments=("prod",),
+    ),
+    Scenario(
+        "8. OS and browser in the build version field",
+        "Address autocomplete freezes the checkout form",
+        """### Build version
+
+Windows 11, Chrome 120
+
+### Steps to reproduce
+
+1. Log in to staging.
+2. Open Checkout and type "Main St" in the address field.
+
+### Actual result
+
+The form freezes for about 10 seconds after each key press.
+
+### Expected result
+
+Suggestions appear while typing, without delays.
+""",
+        frozenset({"build_version"}),
+        environments=("staging",),
+    ),
+    Scenario(
+        "9. expected result asked as a question to a colleague",
+        "Parcel list sorted by date starts from 2019",
+        """Build 2.4.1 (build 1873)
+
+Steps to reproduce:
+1. Log in as a dispatcher with parcels from 2019 to 2026.
+2. Open Parcels.
+3. Click the Date column header to sort by date.
+
+Actual: the list starts with parcels from 2019.
+
+@dana shouldn't the newest be on top?
+""",
+        frozenset({"expected"}),
+    ),
 ]
 
 
@@ -113,3 +248,4 @@ def test_scenario(scenario, new_bug, sandbox, record_property):
     found = findings(sandbox.wait_for_bot_comment(number)["body"])
     record_property("found", str(found))
     assert found == scenario.expected
+    assert scenario.hints <= found.hints

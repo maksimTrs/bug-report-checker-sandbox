@@ -10,7 +10,7 @@ so one left open by a killed run is closed by the next run.
 import re
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -111,9 +111,25 @@ CHECKS = {
     "Actual result": "actual",
     "Build version": "build_version",
 }
+HINTS = {  # the start of each suggestion
+    "Say in the title what is wrong": "title_what",
+    "Name in the title where": "title_where",
+    "Name in the title when": "title_when",
+    "Describe the actual result in text too": "image_actual",
+    "Describe the expected result in text too": "image_expected",
+}
 _MISSING = re.compile(r"^- \*\*(.+?)\*\*:", re.M)
 _UNSURE = re.compile(r"^Not sure about: (.+?)\. Please", re.M)
 _BOLD = re.compile(r"\*\*(.+?)\*\*")
+_HINT = re.compile(r"^- (.+)$", re.M)
+_ENVIRONMENT = re.compile(r"Environment: (.+?)\.</sub>")
+
+
+def _hint(text: str) -> str:
+    for start, key in HINTS.items():
+        if text.startswith(start):
+            return key
+    raise KeyError(text)
 
 
 @dataclass(frozen=True)
@@ -122,21 +138,28 @@ class Findings:
     missing: frozenset[str] = frozenset()
     unsure: frozenset[str] = frozenset()
     long: bool = False  # read in parts: the bot says it could not confirm details
+    environments: tuple[str, ...] = ()
+    # Soft and noisy: a scenario checks the hints it needs are there, no more.
+    hints: frozenset[str] = field(default=frozenset(), compare=False)
 
     def __str__(self) -> str:
         if self.complete:
-            text = "complete"
+            parts = ["complete"]
         else:
             parts = [f"missing {', '.join(sorted(self.missing))}"] * bool(self.missing)
             parts += [f"unsure {', '.join(sorted(self.unsure))}"] * bool(self.unsure)
-            text = "; ".join(parts)
-        return text + " (read in parts)" * self.long
+        parts[-1] += " (read in parts)" * self.long
+        parts += [f"hints {', '.join(sorted(self.hints))}"] * bool(self.hints)
+        env = ", ".join(self.environments)
+        parts += [f"environment {env}"] * bool(env)
+        return "; ".join(parts)
 
 
 def findings(body: str) -> Findings:
-    """An unknown check name raises KeyError: the comment format has changed."""
-    main = body.split("<details>", 1)[0]  # the suggestions are folded below
+    """An unknown check or hint raises KeyError: the comment format has changed."""
+    main, _, folded = body.partition("<details>")  # the suggestions are folded
     unsure = _UNSURE.search(main)
+    env = _ENVIRONMENT.search(body)
     return Findings(
         complete="Bug report complete." in main,
         missing=frozenset(CHECKS[name] for name in _MISSING.findall(main)),
@@ -144,6 +167,8 @@ def findings(body: str) -> Findings:
         if unsure
         else frozenset(),
         long="read in parts" in main,
+        environments=tuple(env[1].split(", ")) if env else (),
+        hints=frozenset(_hint(h) for h in _HINT.findall(folded)),
     )
 
 
