@@ -47,6 +47,51 @@ def test_open_bug_files_a_labelled_bug():
     ]
 
 
+def test_edit_returns_when_github_recorded_it():
+    sent = []
+
+    def handler(request):
+        sent.append((request.method, request.url.path, json.loads(request.content)))
+        return httpx.Response(200, json={"updated_at": "2026-10-10T12:00:05Z"})
+
+    box, _ = sandbox(handler)
+    assert box.edit(7, "New body") == "2026-10-10T12:00:05Z"
+    assert sent == [("PATCH", "/repos/o/r/issues/7", {"body": "New body"})]
+
+
+def run(title, status="completed", conclusion="success"):
+    return {"display_title": title, "status": status, "conclusion": conclusion}
+
+
+def test_wait_for_bot_runs_until_all_of_the_issues_runs_finish():
+    replies = iter(
+        [
+            [],  # the event is not queued yet
+            [run("Mine", "in_progress", None), run("Other")],
+            [run("Mine"), run("Other")],
+        ]
+    )
+    seen = []
+
+    def handler(request):
+        seen.append((request.url.path, dict(request.url.params)))
+        return httpx.Response(200, json={"workflow_runs": next(replies)})
+
+    box, clock = sandbox(handler)
+    assert box.wait_for_bot_runs("Mine", since="2026-10-10T12:00:05Z") == [run("Mine")]
+    assert clock.now == 2 * POLL
+    assert seen[0] == (
+        "/repos/o/r/actions/workflows/bug-checker.yml/runs",
+        {"event": "issues", "created": ">=2026-10-10T12:00:05Z", "per_page": "100"},
+    )
+
+
+def test_wait_for_bot_runs_gives_up_at_the_timeout():
+    box, clock = sandbox(lambda r: httpx.Response(200, json={"workflow_runs": []}))
+    with pytest.raises(TimeoutError, match="no finished bot run for 'Mine'"):
+        box.wait_for_bot_runs("Mine", since="2026-10-10T12:00:05Z", timeout=60)
+
+
 def test_close_marks_the_issue_completed():
     sent = []
 
@@ -153,6 +198,12 @@ def test_findings_read_blockers_hints_and_environment():
     assert found.hints == frozenset({"title_what", "image_actual"})
 
 
+def test_findings_read_the_status_the_bot_checked_in():
+    body = COMPLETE.replace("**Submitted**", "**In Progress**")
+    assert findings(body) == Findings(complete=True, status="In Progress")
+    assert findings(body) != Findings(complete=True)
+
+
 def test_hints_do_not_decide_equality():
     # Soft and noisy: a scenario names the hints it needs, not all of them.
     assert Findings(complete=True, hints=frozenset({"title_when"})) == Findings(
@@ -160,15 +211,19 @@ def test_hints_do_not_decide_equality():
     )
 
 
+FOOTER = "\n\n<sub>Checked in status **Submitted** by bug-report-checker.</sub>"
+
+
 @pytest.mark.parametrize(
-    "body",
+    ("body", "error"),
     [
-        "Missing:\n- **Severity**: say how bad it is.",
-        "<details>\n\n- Attach the logs.\n\n</details>",
+        ("Missing:\n- **Severity**: say how bad it is." + FOOTER, "Severity"),
+        ("<details>\n\n- Attach the logs.\n\n</details>" + FOOTER, "Attach the logs"),
+        ("✅ **Bug report complete.**", "no status"),
     ],
 )
-def test_findings_fail_loudly_on_an_unknown_check_or_hint(body):
-    with pytest.raises(KeyError):
+def test_findings_fail_loudly_when_the_comment_format_changes(body, error):
+    with pytest.raises(KeyError, match=error):
         findings(body)
 
 
@@ -192,6 +247,7 @@ def test_findings_fail_loudly_on_an_unknown_check_or_hint(body):
             ),
             "complete; hints image_actual, title_when; environment prod",
         ),
+        (Findings(complete=True, status="In Progress"), "complete; in In Progress"),
     ],
 )
 def test_findings_as_text(found, text):

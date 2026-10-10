@@ -22,6 +22,7 @@ class Scenario:
     missing: frozenset[str] = frozenset()  # none: the bot calls the report complete
     hints: frozenset[str] = frozenset()  # must be there; others may be too
     environments: tuple[str, ...] = ()
+    status: str = "Submitted"  # a status label on filing, if not the default
 
     @property
     def expected(self) -> Findings:
@@ -29,8 +30,13 @@ class Scenario:
             complete=not self.missing,
             missing=self.missing,
             environments=self.environments,
+            status=self.status,
             hints=self.hints,
         )
+
+    @property
+    def labels(self) -> tuple[str, ...]:
+        return () if self.status == "Submitted" else (self.status,)
 
 
 STACKTRACE = "\n".join(
@@ -238,12 +244,61 @@ Dana, shouldn't the newest be on top?
 """,
         frozenset({"expected"}),
     ),
+    Scenario(
+        "10. filed straight into In Progress",
+        "Pickup slots show yesterday's date",
+        """### Build version
+
+latest
+
+### Steps to reproduce
+
+1. Open Pickups.
+2. Click Book a pickup.
+
+### Actual result
+
+The slot list is headed with yesterday's date.
+
+### Expected result
+
+Today's date heads the slot list.
+""",
+        frozenset({"build_version"}),
+        status="In Progress",
+    ),
 ]
+
+# Scenario 11. On GitHub a status is a label and an unknown label is no status, so an
+# open bug is always in a checked status; the bug leaves them when it is closed.
+CLOSED_TITLE = "Return label prints the sender's address twice"
+CLOSED_BODY = """### Build version
+
+latest
+
+### Steps to reproduce
+
+1. Open a delivered shipment.
+2. Click Create return label.
+
+### Actual result
+
+The sender's address is printed in both address boxes.
+
+### Expected result
+
+The customer's address is in the sender box.
+"""
+CLOSED_EDIT = CLOSED_BODY.replace(
+    "1. Open a delivered shipment.\n2. Click Create return label.\n", ""
+)
 
 
 def test_scenarios_mention_no_one():
     mention = re.compile(r"(?<![\w`])@[A-Za-z0-9-]")
-    assert not [s.id for s in SCENARIOS if mention.search(s.title + s.body)]
+    texts = {s.id: s.title + s.body for s in SCENARIOS}
+    texts["11"] = CLOSED_TITLE + CLOSED_BODY
+    assert not [i for i, text in texts.items() if mention.search(text)]
 
 
 @pytest.mark.e2e
@@ -251,8 +306,28 @@ def test_scenarios_mention_no_one():
 def test_scenario(scenario, new_bug, sandbox, record_property):
     record_property("scenario", scenario.id)
     record_property("expected", str(scenario.expected))
-    number = new_bug(scenario.title, scenario.body)
+    number = new_bug(scenario.title, scenario.body, scenario.labels)
     found = findings(sandbox.wait_for_bot_comment(number)["body"])
     record_property("found", str(found))
     assert found == scenario.expected
     assert scenario.hints <= found.hints
+
+
+@pytest.mark.e2e
+def test_closed_bug_is_not_checked(new_bug, sandbox, record_property):
+    """The bot runs on the edit but stays silent: its comment does not change,
+    though the edit drops the steps."""
+    record_property("scenario", "11. closed, then edited: out of the checked statuses")
+    record_property("expected", "bot ran, comment unchanged")
+    number = new_bug(CLOSED_TITLE, CLOSED_BODY)
+    before = sandbox.wait_for_bot_comment(number)
+    sandbox.close(number)
+    runs = sandbox.wait_for_bot_runs(
+        CLOSED_TITLE, since=sandbox.edit(number, CLOSED_EDIT)
+    )
+    after = sandbox.bot_comment(number)
+    conclusions = ", ".join(r["conclusion"] for r in runs)
+    unchanged = "comment unchanged" if after == before else "comment changed"
+    record_property("found", f"bot ran ({conclusions}), {unchanged}")
+    assert [r["conclusion"] for r in runs] == ["success"]
+    assert after == before

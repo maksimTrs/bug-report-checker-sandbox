@@ -20,6 +20,7 @@ API_VERSION = "2022-11-28"
 REPO = "maksimTrs/bug-report-checker-sandbox"
 E2E_LABEL = "e2e"
 BOT_MARKER = "<!-- bug-report-checker fingerprint="
+BOT_WORKFLOW = "bug-checker.yml"
 PER_PAGE = 100  # the REST API maximum
 # The bot's job: ~1.5 min with a cold model cache, under 1 min warm, plus the queue.
 WAIT = 300
@@ -45,6 +46,7 @@ class Sandbox:
     ):
         self.client = client
         self.path = f"/repos/{repo}/issues"
+        self.runs = f"/repos/{repo}/actions/workflows/{BOT_WORKFLOW}/runs"
         self.clock, self.sleep = clock, sleep
 
     def open_bug(self, title: str, body: str, labels: tuple[str, ...] = ()) -> int:
@@ -61,6 +63,37 @@ class Sandbox:
             json={"state": "closed", "state_reason": "completed"},
         )
         r.raise_for_status()
+
+    def edit(self, number: int, body: str) -> str:
+        """When GitHub recorded the edit, by its clock: the bot's run starts later."""
+        r = self.client.patch(f"{self.path}/{number}", json={"body": body})
+        r.raise_for_status()
+        return r.json()["updated_at"]
+
+    def wait_for_bot_runs(
+        self, title: str, since: str, timeout: float = WAIT
+    ) -> list[dict]:
+        """The bot's runs for issue events on `title` since `since`, once all have
+        finished: proof the bot saw an event even when it stays silent."""
+        deadline = self.clock() + timeout
+        while True:
+            r = self.client.get(
+                self.runs,
+                params={
+                    "event": "issues",
+                    "created": f">={since}",
+                    "per_page": PER_PAGE,
+                },
+            )
+            r.raise_for_status()
+            runs = [x for x in r.json()["workflow_runs"] if x["display_title"] == title]
+            if runs and all(x["status"] == "completed" for x in runs):
+                return runs
+            if self.clock() >= deadline:
+                raise TimeoutError(
+                    f"no finished bot run for {title!r} after {timeout:.0f} s"
+                )
+            self.sleep(POLL)
 
     def bot_comment(self, number: int) -> dict | None:
         page = 1
@@ -123,6 +156,7 @@ _UNSURE = re.compile(r"^Not sure about: (.+?)\. Please", re.M)
 _BOLD = re.compile(r"\*\*(.+?)\*\*")
 _HINT = re.compile(r"^- (.+)$", re.M)
 _ENVIRONMENT = re.compile(r"Environment: (.+?)\.</sub>")
+_STATUS = re.compile(r"Checked in status \*\*(.+?)\*\*")
 
 
 def _hint(text: str) -> str:
@@ -139,6 +173,7 @@ class Findings:
     unsure: frozenset[str] = frozenset()
     long: bool = False  # read in parts: the bot says it could not confirm details
     environments: tuple[str, ...] = ()
+    status: str = "Submitted"  # the status the bot checked the bug in
     # Soft and noisy: a scenario checks the hints it needs are there, no more.
     hints: frozenset[str] = field(default=frozenset(), compare=False)
 
@@ -152,14 +187,19 @@ class Findings:
         parts += [f"hints {', '.join(sorted(self.hints))}"] * bool(self.hints)
         env = ", ".join(self.environments)
         parts += [f"environment {env}"] * bool(env)
+        parts += [f"in {self.status}"] * (self.status != "Submitted")
         return "; ".join(parts)
 
 
 def findings(body: str) -> Findings:
-    """An unknown check or hint raises KeyError: the comment format has changed."""
+    """An unknown check or hint, or no status, raises KeyError: the comment format
+    has changed."""
     main, _, folded = body.partition("<details>")  # the suggestions are folded
     unsure = _UNSURE.search(main)
     env = _ENVIRONMENT.search(body)
+    status = _STATUS.search(body)
+    if not status:
+        raise KeyError("no status in the comment's footer")
     return Findings(
         complete="Bug report complete." in main,
         missing=frozenset(CHECKS[name] for name in _MISSING.findall(main)),
@@ -168,6 +208,7 @@ def findings(body: str) -> Findings:
         else frozenset(),
         long="read in parts" in main,
         environments=tuple(env[1].split(", ")) if env else (),
+        status=status[1],
         hints=frozenset(_hint(h) for h in _HINT.findall(folded)),
     )
 
