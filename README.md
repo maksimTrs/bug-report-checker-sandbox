@@ -1,3 +1,9 @@
+
+
+https://github.com/user-attachments/assets/7a5485fa-404c-4120-870a-fd16bdf077e8
+
+
+
 # bug-report-checker sandbox
 
 [![E2E](https://github.com/maksimTrs/bug-report-checker-sandbox/actions/workflows/e2e.yml/badge.svg)](https://github.com/maksimTrs/bug-report-checker-sandbox/actions/workflows/e2e.yml)
