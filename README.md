@@ -1,16 +1,10 @@
-
-
-https://github.com/user-attachments/assets/c69eb489-70d6-4b0d-ae64-f615422f5e7e
-
-
-
 # bug-report-checker sandbox
 
 [![E2E](https://github.com/maksimTrs/bug-report-checker-sandbox/actions/workflows/e2e.yml/badge.svg)](https://github.com/maksimTrs/bug-report-checker-sandbox/actions/workflows/e2e.yml)
 
 **A bot that reads a new bug report and says what is missing before anyone starts on it**: steps to reproduce, expected result, actual result, build version. This repository is its live demo. Open a bug and its comment appears in about a minute. All issues here are made up.
 
-https://github.com/user-attachments/assets/7a5485fa-404c-4120-870a-fd16bdf077e8
+https://github.com/user-attachments/assets/c69eb489-70d6-4b0d-ae64-f615422f5e7e
 
 > [!NOTE]
 > The bot itself is the GitHub Action [**maksimTrs/bug-report-checker**](https://github.com/maksimTrs/bug-report-checker). This repo only connects it, in [`.github/workflows/bug-checker.yml`](.github/workflows/bug-checker.yml).
