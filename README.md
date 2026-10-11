@@ -1,14 +1,10 @@
-
-
-https://github.com/user-attachments/assets/7a5485fa-404c-4120-870a-fd16bdf077e8
-
-
-
 # bug-report-checker sandbox
 
 [![E2E](https://github.com/maksimTrs/bug-report-checker-sandbox/actions/workflows/e2e.yml/badge.svg)](https://github.com/maksimTrs/bug-report-checker-sandbox/actions/workflows/e2e.yml)
 
 **A bot that reads a new bug report and says what is missing before anyone starts on it**: steps to reproduce, expected result, actual result, build version. This repository is its live demo. Open a bug and its comment appears in about a minute. All issues here are made up.
+
+https://github.com/user-attachments/assets/7a5485fa-404c-4120-870a-fd16bdf077e8
 
 > [!NOTE]
 > The bot itself is the GitHub Action [**maksimTrs/bug-report-checker**](https://github.com/maksimTrs/bug-report-checker). This repo only connects it, in [`.github/workflows/bug-checker.yml`](.github/workflows/bug-checker.yml).
@@ -55,6 +51,15 @@ https://github.com/user-attachments/assets/7a5485fa-404c-4120-870a-fd16bdf077e8
 The bot runs in **strict mode** here (`strict: true` in [`.github/bug-checker.yml`](.github/bug-checker.yml)). Expected and actual results must be written out in the description, and "doesn't work" does not count. When the author edits the report, the bot updates its own comment instead of posting a new one.
 
 **Try it:** [open a bug](https://github.com/maksimTrs/bug-report-checker-sandbox/issues/new?template=bug.yml) with the form.
+
+## How it fits together
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/architecture-dark.png">
+  <img alt="Architecture: a bug report from this repo triggers the Action; inside it the adapter, trigger and cleanup feed the fine-tuned Laya model, rules apply this repo's strict mode, and one bot comment is written back; the e2e tests open bugs and read the verdict" src="docs/architecture-light.png">
+</picture>
+
+An issue event starts the Action. It turns the issue into a report and runs the fine-tuned Laya model, pulled from Hugging Face at a pinned revision, on 7 yes / no checks. Rules on top apply this repo's settings, here `strict: true`, and the bot writes one comment, which it edits on later changes. The e2e tests drive the same loop from outside. Source of the diagram: [`docs/architecture.html`](docs/architecture.html).
 
 ## How this repo is set up
 

@@ -1,0 +1,168 @@
+<!doctype html>
+<html data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>bug-report-checker sandbox: architecture</title>
+<!-- Source of docs/architecture-{dark,light}.png. The demo video embeds the part between the ARCH markers
+     and animates it with Arch.render(root, state); state 1 / extras 1 / e2e 1 is the picture in the README. -->
+<style>
+html, body { margin: 0; background: var(--a-bg); }
+body { width: 1760px; padding: 30px; box-sizing: border-box; }
+/*ARCH-CSS*/
+[data-theme="dark"] { --a-bg: #0d1117; --a-subtle: #151b23; --a-border: #3d444d; --a-fg: #f0f6fc; --a-muted: #9198a1;
+  --a-accent: #4493f8; --a-ok: #3fb950; --a-bad: #f85149; --a-warn: #d29922; --a-zone: rgba(68,147,248,.06); }
+[data-theme="light"] { --a-bg: #ffffff; --a-subtle: #f6f8fa; --a-border: #d1d9e0; --a-fg: #1f2328; --a-muted: #59636e;
+  --a-accent: #0969da; --a-ok: #1a7f37; --a-bad: #d1242f; --a-warn: #9a6700; --a-zone: rgba(9,105,218,.05); }
+.arch { position: relative; width: 1700px; height: 820px; font-family: "Segoe UI Variable Text", "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; color: var(--a-fg); }
+.arch .k, .arch .t, .arch .ztitle { font-family: inherit; }
+.arch svg { position: absolute; inset: 0; overflow: visible; }
+.arch .n { position: absolute; box-sizing: border-box; border: 1.5px solid var(--a-border); border-radius: 10px; background: var(--a-subtle);
+  display: flex; flex-direction: column; justify-content: center; padding: 0 18px; overflow: hidden; }
+.arch .k { font-size: 13px; font-weight: 600; line-height: 1; letter-spacing: .14em; color: var(--a-muted); margin-bottom: 8px; }
+.arch .t { font-size: 22px; font-weight: 600; line-height: 1.2; white-space: nowrap; }
+.arch .s { font: 400 16px/1.3 Consolas, "Cascadia Mono", monospace; color: var(--a-muted); margin-top: 6px; white-space: nowrap; }
+.arch .zone { border: 1.5px dashed var(--a-accent); background: var(--a-zone); justify-content: flex-start; padding-top: 18px; }
+.arch .zone .zt { display: flex; justify-content: space-between; align-items: baseline; white-space: nowrap; }
+.arch .zone .k { color: var(--a-accent); margin: 0; }
+.arch .zone .zr { font: 400 16px/1 Consolas, monospace; color: var(--a-muted); }
+.arch .zone .ztitle { font-size: 26px; font-weight: 600; line-height: 1.2; margin-top: 10px; white-space: nowrap; }
+.arch .in { padding: 0 14px; }
+.arch .in .t { font-size: 19px; }
+.arch .laya { border-color: var(--a-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--a-accent) 18%, transparent); }
+.arch .laya .k { color: var(--a-accent); }
+.arch .dots { display: flex; gap: 6px; margin-top: 9px; }
+.arch .dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--a-border); }
+.arch .lbl { position: absolute; font: 400 15px/1.2 Consolas, "Cascadia Mono", monospace; color: var(--a-muted); white-space: nowrap; }
+.arch .ok { border-color: color-mix(in srgb, var(--a-ok) 60%, var(--a-border)); }
+.arch .ok .k { color: var(--a-ok); }
+.arch .cfg .k, .arch .ext .k { color: var(--a-warn); }
+.arch .n { z-index: 2; } .arch .zone { z-index: 1; }
+/* the pulse runs under the nodes, so it shows only on the arrows between them */
+.arch .pulse { z-index: 1; position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--a-accent);
+  box-shadow: 0 0 18px 6px color-mix(in srgb, var(--a-accent) 55%, transparent); }
+/*/ARCH-CSS*/
+</style>
+</head>
+<body>
+<!--ARCH-HTML-->
+<div class="arch" id="arch">
+  <svg id="a-svg"><defs><marker id="a-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--a-muted)"/></marker></defs><g id="a-edges"></g></svg>
+  <div class="n" id="a-issue"><div class="k">INPUT</div><div class="t">Bug report</div><div class="s">issue form · label bug</div></div>
+  <div class="n zone" id="a-zone"><div class="zt"><div class="k">ACTION · maksimTrs/bug-report-checker</div><div class="zr" id="a-zr">GitHub Actions · CPU runner · 30–45 s</div></div><div class="ztitle" id="a-ztitle">bug-report-checker</div></div>
+  <div class="n in" id="a-adapter"><div class="k">ADAPTER</div><div class="t">Issue</div><div class="s">github.py</div></div>
+  <div class="n in" id="a-trigger"><div class="k">TRIGGER</div><div class="t">Bug + status?</div><div class="s">core.py</div></div>
+  <div class="n in" id="a-clean"><div class="k">CLEANUP</div><div class="t">Links, code</div><div class="s">preprocess.py</div></div>
+  <div class="n in laya" id="a-laya"><div class="k">MODEL · 7 CHECKS</div><div class="t">Laya, fine-tuned</div><div class="s">decide.py</div></div>
+  <div class="n in" id="a-rules"><div class="k">RULES</div><div class="t">Build, strict</div><div class="s">rules.py</div><div class="dots" id="a-dots"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+  <div class="n in" id="a-post"><div class="k">PUBLISH</div><div class="t">Edit in place</div><div class="s">publish.py</div></div>
+  <div class="n ok" id="a-comment"><div class="k">OUTPUT</div><div class="t">Bot comment</div><div class="s">Missing / ✅ complete</div></div>
+  <div class="n ext" id="a-hf"><div class="k">HUGGING FACE</div><div class="t">ippo123/bug-report-checker</div><div class="s">pinned revision · Actions cache</div></div>
+  <div class="n cfg" id="a-cfg"><div class="k">THIS REPO · .github/bug-checker.yml</div><div class="t">strict: true · status labels · stands</div></div>
+  <div class="n" id="a-e2e"><div class="k">E2E · tests/ · pytest-xdist</div><div class="t">11 scenarios in CI</div></div>
+  <div class="lbl" id="l-in">on: issues</div>
+  <div class="lbl" id="l-out">one comment</div>
+  <div class="lbl" id="l-hf">model</div>
+  <div class="lbl" id="l-cfg1">statuses</div>
+  <div class="lbl" id="l-cfg2">strict</div>
+  <div class="lbl" id="l-e2e1">opens bugs · E2E_TOKEN</div>
+  <div class="lbl" id="l-e2e2">reads the verdict</div>
+  <div class="pulse" id="a-pulse"></div>
+</div>
+<!--/ARCH-HTML-->
+<script>
+/*ARCH-JS*/
+// Diagram of the sandbox with the Action opened up. state: { open 0..1, extras 0..1, e2e 0..1, checks 0..7, pulse null | 0..1 }.
+window.Arch = (() => {
+  const lerp = (a, b, x) => a + (b - a) * x;
+  const ease = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  const clamp = x => Math.max(0, Math.min(1, x));
+  // [x, y, w, h] closed / open; inner nodes only have the open box.
+  const BOX = {
+    issue:   [[150, 300, 240, 130], [0, 300, 230, 130]],
+    zone:    [[590, 300, 520, 130], [290, 190, 1120, 320]],
+    comment: [[1310, 300, 240, 130], [1470, 300, 230, 130]],
+    hf:      [[0, 0, 0, 0], [800, 20, 360, 110]],
+    cfg:     [[0, 0, 0, 0], [440, 600, 760, 80]],
+    e2e:     [[0, 0, 0, 0], [0, 720, 340, 80]],
+  };
+  const INNER = ['adapter', 'trigger', 'clean', 'laya', 'rules', 'post'];
+  const IW = [140, 152, 152, 196, 152, 152], IY = 300, IH = 140, IGAP = 24;
+  // #10's final verdict: title fine; steps / expected / actual / build missing. In strict mode the rules,
+  // not the model, turn these "present" into "missing", so the verdict lights up on the rules node.
+  const CHECKS = [1, 1, 1, 0, 0, 0, 0];
+  const rect = (r, b) => { r.style.left = b[0] + 'px'; r.style.top = b[1] + 'px'; r.style.width = b[2] + 'px'; r.style.height = b[3] + 'px'; };
+
+  function render(root, s) {
+    const $ = id => root.querySelector('#' + id);
+    const o = ease(clamp(s.open)), ex = clamp(s.extras), e2 = clamp(s.e2e);
+    const box = {};
+    for (const [k, [c, p]] of Object.entries(BOX)) {
+      const b = c.map((v, i) => lerp(v, p[i], (k === 'hf' || k === 'cfg' || k === 'e2e') ? 1 : o));
+      box[k] = b; rect($('a-' + k), b);
+    }
+    $('a-hf').style.opacity = ex; $('a-cfg').style.opacity = ex; $('a-e2e').style.opacity = e2;
+    $('a-ztitle').style.opacity = 1 - clamp(o * 2.5);
+    $('a-zr').style.opacity = clamp(o * 2 - 1);
+    // inner pipeline, left to right inside the opened zone
+    let x = box.zone[0] + 21;
+    INNER.forEach((k, i) => {
+      const b = [x, IY, IW[i], IH]; x += IW[i] + IGAP; box[k] = b;
+      const el = $('a-' + k); rect(el, b);
+      const a = clamp((o - .55) / .45 * 1.6 - i * .12);
+      el.style.opacity = a; el.style.transform = `translateY(${(1 - a) * 14}px)`;
+    });
+    [...$('a-dots').children].forEach((d, i) => {
+      const lit = s.checks >= i + 1;
+      d.style.background = lit ? (CHECKS[i] ? 'var(--a-ok)' : 'var(--a-bad)') : 'var(--a-border)';
+      d.style.transform = `scale(${lit ? 1 + .35 * clamp((i + 1.4) - s.checks) : 1})`;
+    });
+
+    // edges
+    const R = b => [b[0] + b[2], b[1] + b[3] / 2], L = b => [b[0], b[1] + b[3] / 2];
+    const edges = [];
+    const line = (pts, op = 1, dash = '') => edges.push(`<polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="none" stroke="var(--a-muted)" stroke-width="2" ${dash} marker-end="url(#a-head)" opacity="${op}"/>`);
+    line([R(box.issue), [box.zone[0], R(box.issue)[1]]]);
+    line([[box.zone[0] + box.zone[2], R(box.comment)[1]], L(box.comment)]);
+    const ia = clamp((o - .7) / .3);
+    for (let i = 0; i < INNER.length - 1; i++) line([R(box[INNER[i]]), L(box[INNER[i + 1]])], ia);
+    const lc = box.laya[0] + box.laya[2] / 2;
+    line([[lc, box.hf[1] + box.hf[3]], [lc, box.laya[1]]], ex * ia);
+    const tc = box.trigger[0] + box.trigger[2] / 2, rc = box.rules[0] + box.rules[2] / 2;
+    line([[tc, box.cfg[1]], [tc, box.trigger[1] + IH]], ex * ia);
+    line([[rc, box.cfg[1]], [rc, box.rules[1] + IH]], ex * ia);
+    const ic = box.issue[0] + box.issue[2] / 2, cc = box.comment[0] + box.comment[2] / 2, ey = box.e2e[1] + box.e2e[3] / 2;
+    line([[ic, box.e2e[1]], [ic, box.issue[1] + box.issue[3]]], e2, 'stroke-dasharray="6 6"');
+    line([[cc, box.comment[1] + box.comment[3]], [cc, ey], [box.e2e[0] + box.e2e[2], ey]], e2, 'stroke-dasharray="6 6"');
+    $('a-edges').innerHTML = edges.join('');
+
+    const place = (id, xx, yy, op) => { const el = $(id); el.style.left = xx + 'px'; el.style.top = yy + 'px'; el.style.opacity = op; };
+    place('l-in', box.issue[0], box.issue[1] - 30, o);
+    place('l-out', box.comment[0], box.comment[1] - 30, o);
+    place('l-hf', lc + 10, box.hf[1] + box.hf[3] + 8, ex * ia);
+    place('l-cfg1', tc + 10, box.cfg[1] - 40, ex * ia);
+    place('l-cfg2', rc + 10, box.cfg[1] - 40, ex * ia);
+    place('l-e2e1', ic + 12, box.e2e[1] - 50, e2);
+    place('l-e2e2', cc - 190, ey - 26, e2);
+
+    // a dot that carries the report through the pipeline; each node lights up as it passes
+    const p = $('a-pulse');
+    const path = [R(box.issue), ...INNER.map(k => [box[k][0] + box[k][2] / 2, box[k][1] + IH / 2]), L(box.comment)];
+    const segs = path.length - 1, f = s.pulse == null ? -9 : clamp(s.pulse) * segs;
+    INNER.forEach((k, j) => {
+      const g = Math.max(0, 1 - Math.abs(f - (j + 1)) * 1.4), el = $('a-' + k);
+      el.style.borderColor = g > 0 ? `color-mix(in srgb, var(--a-accent) ${Math.round(g * 100)}%, var(--a-border))` : '';
+      el.style.boxShadow = g > 0 ? `0 0 ${Math.round(28 * g)}px color-mix(in srgb, var(--a-accent) ${Math.round(45 * g)}%, transparent)` : '';
+    });
+    if (s.pulse == null) { p.style.opacity = 0; return; }
+    const i = Math.min(segs - 1, Math.floor(f)), t = f - i;
+    p.style.left = lerp(path[i][0], path[i + 1][0], t) + 'px';
+    p.style.top = lerp(path[i][1], path[i + 1][1], t) + 'px';
+    p.style.opacity = s.pulse >= 1 ? 0 : 1;
+  }
+  return { render };
+})();
+/*/ARCH-JS*/
+Arch.render(document.getElementById('arch'), { open: 1, extras: 1, e2e: 1, checks: 0, pulse: null });
+</script>
+</body>
+</html>
