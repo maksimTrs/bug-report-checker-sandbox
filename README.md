@@ -63,9 +63,14 @@ An issue event starts the Action. It turns the issue into a report and runs the 
 
 ## How this repo is set up
 
-- [`.github/workflows/bug-checker.yml`](.github/workflows/bug-checker.yml): the bot on issue events, pinned to a commit of the Action.
-- [`.github/bug-checker.yml`](.github/bug-checker.yml): its settings. Statuses are the labels `Submitted`, `Open` and `In Progress`; an open bug without one counts as `Submitted`. The test stands are `staging` and `qa1`.
-- [`.github/ISSUE_TEMPLATE/bug.yml`](.github/ISSUE_TEMPLATE/bug.yml): the bug form.
+| File | Runs on | What is not obvious |
+|---|---|---|
+| [`.github/workflows/bug-checker.yml`](.github/workflows/bug-checker.yml) | issue events; a push to it, weekly, on demand | Runs from `issues` events can only read the Actions cache, so the trusted events put the model into it ([L6–L12](.github/workflows/bug-checker.yml#L6-L12)). Each issue has its own concurrency group, so several edits in a row produce one check, the last. A label that is neither `bug` nor a status skips the check and gets a group of its own. In the issue's group it would cancel the real check ([L18–L36](.github/workflows/bug-checker.yml#L18-L36)). |
+| [`.github/workflows/e2e.yml`](.github/workflows/e2e.yml) | on demand, weekly, on changes to the tests or the bot's pin | Issues are opened with `E2E_TOKEN`, a fine-grained PAT with Issues read and write: issues opened with the workflow's own `GITHUB_TOKEN` start no workflows, so the bot would never see them. Runs queue instead of cancelling each other, so no test stops halfway with its issue left open ([L21–L23](.github/workflows/e2e.yml#L21-L23)). The weekly run starts 30 minutes after the model cache is warmed. |
+| [`.github/bug-checker.yml`](.github/bug-checker.yml) | read by the bot | `strict: true`. Statuses are the labels `Submitted`, `Open` and `In Progress`, and an open bug without one counts as `Submitted`. The test stands are `staging` and `qa1`. |
+| [`.github/ISSUE_TEMPLATE/bug.yml`](.github/ISSUE_TEMPLATE/bug.yml) | the "New issue" button | The bug form; it adds the `bug` label. |
+
+Both workflows have only the permissions they need: the bot gets `contents: read` and `issues: write`, the tests get `contents: read`. The bot and every third-party action are pinned to a commit SHA, with the version in a comment.
 
 ## End-to-end tests
 
@@ -73,7 +78,7 @@ Each scenario in [`tests/test_scenarios.py`](tests/test_scenarios.py) is a made-
 
 A run opens real issues with the `e2e` label, waits for the bot's comment and closes each issue at the end. The scenarios run in parallel (pytest-xdist), so a run takes about two minutes. The Job Summary lists every scenario with its issue and the expected and actual verdicts.
 
-CI ([`.github/workflows/e2e.yml`](.github/workflows/e2e.yml)) runs on demand, weekly, and on changes to the tests or the bot's setup. The `E2E_TOKEN` secret is a fine-grained PAT for this repo with Issues read and write. Issues opened with the workflow's own `GITHUB_TOKEN` start no workflows, so the bot would never see them.
+Open `e2e` issues older than an hour are left over from an interrupted run, and the next run closes them ([`tests/sandbox.py`](tests/sandbox.py)).
 
 To run locally, use `uv run pytest -n 12` after `gh auth login`, or set a token in `E2E_TOKEN`. `uv run pytest -m "not e2e"` runs only the offline tests of the client.
 
